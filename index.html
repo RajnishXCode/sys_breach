@@ -1,0 +1,474 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>System Alert</title>
+<style>
+  :root{
+    --bg:#000;
+    --green:#7fffd4;
+    --red:#ff4b4b;
+    --muted:#93f5d5;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);font-family: "Courier New", monospace;color:var(--muted)}
+  /* prevent underlying scroll while overlay is active */
+  body.prank-active{overflow:hidden}
+
+  /* Overlay */
+  .overlay{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(255,0,0,0.06), transparent 10%),
+      linear-gradient(180deg, rgba(0,0,0,0.92), rgba(3,6,12,0.98));
+    z-index:999999; padding:24px; box-sizing:border-box;
+  }
+
+  /* Terminal window */
+  .term {
+    width:min(1080px,96%); max-height:88vh; border-radius:10px;
+    background:linear-gradient(180deg, rgba(1,4,9,0.98), rgba(0,0,0,0.95));
+    border:1px solid rgba(255,0,0,0.06); padding:18px; box-shadow:0 30px 90px rgba(0,0,0,0.85);
+    overflow:auto; position:relative;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .header { display:flex; gap:12px; align-items:center; margin-bottom:10px }
+  .dot { width:11px;height:11px;border-radius:50%; background:var(--red); box-shadow:0 0 8px var(--red) }
+  .h-title { color:#ff9b9b; font-weight:800; letter-spacing:1px }
+
+  .screen {
+    background: rgba(0,0,0,0.36); padding:14px; border-radius:6px; color:#c6ffd9;
+    font-size:14px; line-height:1.45; white-space:pre-wrap; min-height:260px; font-family: "Courier New", monospace;
+    position:relative; overflow:hidden;
+  }
+
+  .big {
+    margin-top:14px; color:var(--red); font-weight:900; font-size:clamp(24px,5vw,48px);
+    text-transform:uppercase; letter-spacing:1px; text-align:center;
+  }
+
+  .typed { color:#bfffd1; font-size:13px; margin-top:8px; min-height:72px; }
+
+  /* controls */
+  .controls { display:flex; gap:12px; justify-content:center; margin-top:16px; flex-wrap:wrap }
+  .btn {
+    padding:10px 14px; border-radius:8px; border:none; cursor:pointer;
+    font-weight:800; letter-spacing:0.6px; background:rgba(255,255,255,0.06); color:#fff;
+  }
+  .btn:active{transform:translateY(1px)}
+  .reveal { background: linear-gradient(90deg,#ff6b6b,#ff2f2f); box-shadow:0 10px 30px rgba(255,31,31,0.12) }
+  .close { background: linear-gradient(90deg,#1f2937,#0f172a); }
+
+  /* flashing bar */
+  .flash {
+    position:absolute; left:0; top:0; right:0; height:6px; background:linear-gradient(90deg,#ff1f1f,#ff9b9b);
+    animation: flashy 1.2s linear infinite; opacity:0.9;
+  }
+  @keyframes flashy { 0%{transform:translateX(-100%)} 50%{transform:translateX(0)} 100%{transform:translateX(100%)} }
+
+  /* scanlines */
+  .scanline{
+    pointer-events:none; position:absolute; inset:0; mix-blend-mode:overlay; opacity:0.06;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.02) 0px,
+      rgba(255,255,255,0.02) 1px,
+      transparent 1px,
+      transparent 6px
+    );
+  }
+
+  /* bottom-right prank label required by you */
+  .bottom-prank {
+    position:fixed; right:12px; bottom:10px; z-index:1000001;
+    background:rgba(255,215,50,0.95); color:#0a0a0a; padding:8px 10px; border-radius:6px; font-weight:800;
+    box-shadow:0 10px 30px rgba(0,0,0,0.45); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    user-select:none;
+  }
+
+  /* typing cursor */
+  .cursor { display:inline-block; width:10px; height:18px; background:var(--green); margin-left:6px; vertical-align:middle; animation: blink 1s steps(2,start) infinite }
+  @keyframes blink { to { visibility:hidden } }
+
+  /* small footer note inside terminal (optional) */
+  .foot { margin-top:12px; color:#ffdfdf; font-weight:700; font-size:12px; text-align:center; opacity:0.9; }
+
+
+  #breachPopup {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999999;
+}
+
+.popupBox {
+  background: black;
+  padding: 30px 60px;
+  border: 2px solid #ff4b4b;
+  font-size: 38px;
+  color: #ff4b4b;
+  font-weight: 900;
+  text-shadow: 0 0 12px red;
+  animation: flicker 0.15s infinite;
+  border-radius: 10px;
+}
+
+#finalAlert {
+  position: fixed;
+  inset: 0;
+  background: #1a0000;
+  color: red;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  text-shadow: 0 0 15px red;
+  z-index: 99999999;
+}
+
+.alertText {
+  animation: pulse 1s infinite;
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+</style>
+</head>
+<body>
+
+
+  <!-- The bottom-right explicit text the user requested -->
+  <!-- <div class="bottom-prank" id="bottomPrank">its a prank</div> -->
+
+  <!-- Overlay shown by default -->
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="System Alert">
+    <div class="term" role="document" aria-live="polite">
+      <div class="flash" aria-hidden="true"></div>
+      <div class="header">
+        <div class="dot" aria-hidden="true"></div>
+        <div class="h-title">SECURITY ALERT</div>
+      </div>
+
+      <div class="screen" id="screen">
+        <div class="big" id="bigText">SYSTEM BREACH DETECTED</div>
+        <div class="typed" id="typedArea"></div>
+
+        
+
+        <!-- <div class="controls" id="controls">
+          <button class="btn reveal" id="revealBtn">Show Proof</button>
+          <button class="btn close" id="closeBtn">Close</button>
+        </div> -->
+
+        <!-- <div class="foot" style="display:none;" id="footNote">Refreshing the page will return you to normal.</div> -->
+
+        <div class="scanline" aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+
+<!-- <script>
+  document.body.classList.add('prank-active');
+
+  const lines = [
+  "Initializing kernel audit...",
+  "Loading intrusion detection signatures: [██████████] 100%",
+  "Scanning active network interfaces...",
+  "Interface eth0 — OK",
+  "Interface wlan0 — latency anomaly detected",
+  "Checking SSL/TLS handshake integrity...",
+  "TLS handshake deviation: 0.092ms",
+  "Inspecting system event logs...",
+  "Event overflow detected in sector /var/log/core",
+  "Attempting to flush corrupted event blocks...",
+  "Block 0001 cleared",
+  "Block 0002 cleared",
+  "Block 0003 failed — retrying",
+  "Retry successful",
+  "Cross-referencing active daemons...",
+  "Daemon integrity matrix mismatch: threshold exceeded",
+  "Loading intrusion behavior models...",
+  "Analyzing outbound traffic for irregular spikes...",
+  "Spike detected at 12.4kb/s — unusual for idle state",
+  "Tracing suspicious packet chain...",
+  "Packet origin: UNKNOWN",
+  "Attempting reverse mapping...",
+  "Reverse mapping failed: checksum mismatch",
+  "Verifying checksum tables...",
+  "Table 1/4 OK",
+  "Table 2/4 corrupted",
+  "Rebuilding corrupted checksum table...",
+  "Rebuild complete",
+  "Running memory probe...",
+  "Memory segment 44A — unauthorized write",
+  "Isolating memory segment...",
+  "Isolation failed — process resisting",
+  "Attempting forced lock...",
+  "Lock acquired",
+  "Quarantining rogue process...",
+  "Quarantine stable",
+  "Re-scanning critical system files...",
+  "System file /bin/corectl modified unexpectedly",
+  "Comparing to canonical hash...",
+  "Hash mismatch detected",
+  "Restoring canonical version...",
+  "Restore complete",
+  "Checking root escalation attempts...",
+  "Unauthorized sudo attempt logged",
+  "Attempt source: PID 1138 — 'unknown_agent'",
+  "Attempt severity: HIGH",
+  "Evaluating agent behavior signature...",
+  "Signature resembles stealth-class worm",
+  "Countermeasure package loading...",
+  "Deploying countermeasure phase 1...",
+  "Phase 1 complete",
+  "Deploying phase 2...",
+  "Phase 2 blocked — interference detected",
+  "Isolating interference",
+  "Isolation complete",
+  "Deploying phase 2 retry...",
+  "Phase 2 successful",
+  "System heartbeat monitoring...",
+  "Heartbeat irregularity detected",
+  "Attempting stabilization...",
+  "Stabilization successful",
+  "Performing deep scan...",
+  "Scanning sector A0 — OK",
+  "Scanning sector A1 — OK",
+  "Scanning sector A2 — anomaly",
+  "Analyzing anomaly...",
+  "Anomaly classified: unauthorized syscall injection",
+  "Patch applied",
+  "System recalibration...",
+  "Recalibration complete",
+  "Rechecking intrusion vectors...",
+  "Vector gamma-12 still active",
+  "Attempting shutdown...",
+  "Shutdown incomplete",
+  "Forcing shutdown override...",
+  "Override engaged",
+  "Vector neutralized",
+  "Dumping suspicious logs to /dev/null...",
+  "Logs cleared",
+  "Rebuilding system integrity mesh...",
+  "Integrity mesh stabilized",
+  "Finalizing security audit...",
+  "Audit complete — unresolved threat remains",
+  "WARNING: SYSTEM INTEGRITY COMPROMISED",
+  "Locking non-critical UI elements..."
+];
+
+
+  const typedArea = document.getElementById('typedArea');
+  const bigText = document.getElementById('bigText');
+  const revealBtn = document.getElementById('revealBtn');
+  const closeBtn = document.getElementById('closeBtn');
+  const overlay = document.getElementById('overlay');
+  const footNote = document.getElementById('footNote');
+
+  // typewriter effect
+  async function typeLines(lines, el) {
+    for (const line of lines) {
+      await typeLine(line, el);
+      // el.appendChild(document.createElement('br'));
+       el.innerHTML += "<br>";
+      await wait(300);
+    }
+    // small pause then show a pulsing cursor
+    await wait(400);
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    el.appendChild(cursor);
+    // show foot note subtly after typing finishes
+    footNote.style.display = 'block';
+  }
+
+  function typeLine(text, el) {
+    return new Promise(resolve => {
+      let i = 0;
+      const t = setInterval(() => {
+        el.textContent += text.charAt(i);
+        i++;
+        if (i >= text.length) {
+          clearInterval(t);
+          resolve();
+        }
+      }, 24 + Math.random()*36);
+    });
+  }
+
+  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // start typing immediately
+  typeLines(lines, typedArea);
+
+  // reveal button: replace big text with "YOU ARE PRANKED"
+  revealBtn.addEventListener('click', () => {
+    bigText.textContent = "YOU ARE PRANKED";
+    // small animation
+    bigText.style.transform = 'scale(1.02)';
+    setTimeout(() => bigText.style.transform = '', 220);
+    // disable button after showing prank
+    revealBtn.disabled = true;
+    revealBtn.textContent = "Pranked ✔";
+  });
+
+  // close button: removes overlay (safe exit)
+  closeBtn.addEventListener('click', removeOverlay);
+
+  // allow Esc to close
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') removeOverlay();
+  });
+
+  function removeOverlay(){
+    const o = document.getElementById('overlay');
+    if (o) {
+      o.remove();
+      document.body.classList.remove('prank-active');
+    }
+  }
+
+  // Optional: if you want the bottom-right label to be clickable to highlight it briefly:
+  const bottom = document.getElementById('bottomPrank');
+  bottom.addEventListener('click', () => {
+    bottom.style.transition = 'transform 120ms';
+    bottom.style.transform = 'scale(0.96)';
+    setTimeout(()=> bottom.style.transform = '', 140);
+  });
+</script> -->
+
+<script>
+  document.body.classList.add('prank-active');
+
+  const lines = [
+  "Initializing breach console...",
+  "Bypassing firewall layer 1...",
+  "Bypassing firewall layer 2...",
+  "Spoofing MAC address...",
+  "Injecting packet flood...",
+  "Brute-forcing session token...",
+  "Decrypting AES-256 block...",
+  "Decrypting next block...",
+  "Establishing covert SSH tunnel...",
+  "Tunnel handshake spoofed — ACCEPTED",
+  "Extracting system salts...",
+  "Elevating privileges to root...",
+  "Access token granted — ROOT USER",
+  "Scanning internal subnet...",
+  "Found open port 4444 — exploiting...",
+  "Payload uploaded — waiting for exec...",
+  "Remote shell attached...",
+  "Reading system password shadow...",
+  "Cracking SHA-512 hashes...",
+  "Injecting process into PID 3321...",
+  "PID 3321 hooked successfully",
+  "Disabling intrusion detection...",
+  "Disabling audit logs...",
+  "Tampering kernel flags...",
+  "Kernel integrity check FAILED",
+  "Uploading persistence module...",
+  "Persistence established at /tmp/.syscache",
+  "Opening encrypted message bus...",
+  "Intercepting active sessions...",
+  "Session hijacked — USER: admin",
+  "Streaming keystrokes...",
+  "Injecting SQL payload...",
+  "Database dump initiated...",
+  "Extracting sensitive tables...",
+  "Wiping trace artifacts...",
+  "Fake 200-OK responses issued",
+  "Encrypting stolen data...",
+  "Exfiltrating via covert DNS tunnel...",
+  "Connection masked",
+  "System breach COMPLETE"
+];
+
+  const typedArea = document.getElementById('typedArea');
+
+  async function typeLines(lines) {
+    for (const line of lines) {
+      await typeLine(line);
+      await wait(250);
+    }
+  }
+
+  function typeLine(text) {
+    return new Promise(resolve => {
+      const lineDiv = document.createElement("div");   // ← each line gets its own element
+      typedArea.appendChild(lineDiv);
+
+      let i = 0;
+      const t = setInterval(() => {
+        lineDiv.textContent += text.charAt(i);
+        i++;
+        if (i >= text.length) {
+          clearInterval(t);
+          resolve();
+        }
+      }, 20 + Math.random()*25);
+    });
+  }
+
+  function wait(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  // typeLines(lines);
+  typeLines(lines).then(showBreachPopup);
+
+  function showBreachPopup() {
+  const popup = document.getElementById("breachPopup");
+  popup.style.display = "flex";
+
+  // popup stays for 2 seconds
+  setTimeout(() => {
+    popup.style.display = "none";
+    showFinalAlert();
+  }, 2000);
+}
+
+function showFinalAlert() {
+  const alert = document.getElementById("finalAlert");
+  alert.style.display = "flex";
+
+  // stays for 2.5 sec then closes everything
+  setTimeout(() => {
+    alert.style.display = "none";
+    document.getElementById("overlay").remove();
+    document.body.classList.remove("prank-active");
+  }, 2500);
+}
+
+
+</script>
+
+<!-- Popup after typing finishes -->
+<div id="breachPopup">
+  <div class="popupBox">SYSTEM BREACHED</div>
+</div>
+
+<!-- Final alert screen -->
+<div id="finalAlert">
+  <div class="alertText">⚠ SECURITY OVERRIDE DETECTED ⚠</div>
+</div>
+
+
+</body>
+</html>
+
